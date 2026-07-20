@@ -8,6 +8,51 @@ Perkiraan total waktu: **4–7 jam**, sebagian besar menunggu training.
 
 ---
 
+## Perbaikan yang sudah diterapkan (audit sebelum run)
+
+Versi paket lama **tidak akan ter-install** — pin-nya saling bertabrakan dengan
+`unsloth==2026.1.1`, yang mensyaratkan `transformers>=4.51.3`, `trl>=0.18.2`,
+`datasets>=3.4.1`, dan `bitsandbytes>=0.45.5`. Sudah diganti di `requirements.txt`
+dan di sel §2 ketiga notebook:
+
+| Paket | Lama (gagal) | Baru |
+|---|---|---|
+| trl | 0.13.0 — belum punya `GRPOTrainer` sama sekali | 0.18.2 |
+| transformers | 4.48.2 | 4.57.1 |
+| datasets | 3.2.0 | 3.6.0 |
+| bitsandbytes | 0.45.0 | 0.47.0 |
+| peft | 0.14.0 | 0.17.1 |
+| torch | 2.5.1 (dipin) | tidak dipin, pakai bawaan Colab |
+
+`trl` sengaja **tidak** dinaikkan lewat 0.18.2: mulai 0.20 argumen
+`SFTConfig(max_seq_length=...)` dihapus, dan notebook fine-tuning memakainya.
+
+Perbaikan lain:
+
+- **Notebook 1** — `bnb_4bit_compute_dtype` dulu dipaksa `bfloat16`, padahal T4 tidak
+  mendukungnya. Kini mengikuti `torch.cuda.is_bf16_supported()`.
+- **Notebook 2** — `per_device_train_batch_size` 4 → 2 (accumulation 2 → 4). Batch
+  efektif tetap 8 dan tetap habis dibagi `num_generations=4`, tapi jauh lebih aman
+  dari OOM karena tiap step membangkitkan 4 × 256 token.
+- **Notebook 3** — `tampilkan()` kini mencetak jawaban mentah lebih dulu. Sebelumnya
+  hanya lewat `display(Markdown(...))`, dan renderer menelan `<think>` sebagai tag
+  HTML tak dikenal — rubrik justru mewajibkan tag itu **terlihat** di output.
+
+## Risiko yang belum ditangani — perhatikan saat run
+
+- **`web_search()` tanpa try/except.** `duckduckgo-search` kerap melempar
+  `RatelimitException`. Kalau sel uji fallback (§11c/§30) crash, bungkus panggilan
+  `DDGS()` dengan `try/except Exception` yang mengembalikan `("", [])`.
+- **Metadata filtering bisa memicu fallback web palsu.** Filter diterapkan *setelah*
+  retrieval; kalau pool tersaring habis, skor Top-1 jadi 0.0 dan sistem lompat ke
+  DuckDuckGo, bukan menjawab dari peraturan yang difilter. Periksa output sel uji
+  metadata — kalau yang muncul hasil web, naikkan `fetch_k` atau longgarkan filter.
+- **Analisis §7 notebook 1 masih spekulatif.** Teksnya ditulis sebelum training
+  berjalan ("rawan naik setelah step ~500"). **Wajib** ditulis ulang dari angka nyata.
+- **`HF_USERNAME = "vikaputri"`** masih placeholder di §2 ketiga notebook.
+
+---
+
 ## Persiapan (sekali saja, ~20 menit)
 
 ### 1. Akun & token Hugging Face

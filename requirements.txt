@@ -1,27 +1,34 @@
 # Proyek Akhir PGABL — Fine-tuned Chatbot Tim Legal berbasis RAG
-# Versi dikunci agar reviewer dapat mereproduksi tanpa konflik dependensi.
 # Basis: Google Colab, Python 3.11, GPU T4.
+#
+# Versi di bawah diverifikasi terhadap metadata PyPI unsloth==2026.1.1,
+# yang mensyaratkan:
+#   transformers >=4.51.3,<=4.57.3   datasets >=3.4.1,<4.4.0
+#   trl >=0.18.2,<=0.24.0 (!=0.19.0) bitsandbytes >=0.45.5 (!=0.46.0,!=0.48.0)
+#   peft >=0.7.1 (!=0.11.0)          accelerate >=0.34.1
+# Jangan menurunkan versi di blok pertama — pip akan gagal me-resolve.
 
 # ---- Fine-tuning & GRPO (Kriteria 1) ----
 unsloth==2026.1.1
-trl==0.13.0
-peft==0.14.0
-transformers==4.48.2
-datasets==3.2.0
-accelerate==1.3.0
-bitsandbytes==0.45.0
-torch==2.5.1
+trl==0.18.2            # 0.20+ menghapus SFTConfig(max_seq_length=...) yang dipakai notebook
+peft==0.17.1
+transformers==4.57.1
+datasets==3.6.0
+accelerate==1.10.1
+bitsandbytes==0.47.0
+# torch sengaja tidak dipin: pakai bawaan runtime Colab (>=2.4.0) agar unsloth
+# menarik xformers yang cocok. Memaksa versi torch memicu reinstall CUDA yang lama.
 
 # ---- Reward function GRPO ----
 rouge-score==0.1.2
 langdetect==1.0.9
 
 # ---- Sistem RAG (Kriteria 2) ----
-langchain==0.3.14
-langchain-community==0.3.14
-langchain-huggingface==0.1.2
-sentence-transformers==3.3.1
-faiss-cpu==1.9.0
+langchain==0.3.27
+langchain-community==0.3.27
+langchain-huggingface==0.3.1
+sentence-transformers==3.4.1
+faiss-cpu==1.12.0
 rank-bm25==0.2.2
 pymupdf==1.25.2
 duckduckgo-search==7.2.1
