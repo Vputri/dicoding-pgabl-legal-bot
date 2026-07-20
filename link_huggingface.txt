@@ -1,0 +1,14 @@
+Proyek Akhir PGABL — Fine-tuned Chatbot Tim Legal berbasis RAG
+Nama: Vika Putri Ariyanti
+
+=== BELUM DIISI — ganti placeholder di bawah setelah model ter-push ke Hugging Face ===
+Pastikan kedua repositori berstatus PUBLIC. Repo Private menyebabkan submission ditolak.
+
+1. Model hasil Fine-tuning (SFT, merged_16bit)
+https://huggingface.co/<username>/qwen2.5-3b-legal-id-sft
+
+2. Model hasil GRPO (merged_16bit)
+https://huggingface.co/<username>/qwen2.5-3b-legal-id-grpo
+
+Base model yang digunakan: unsloth/Qwen2.5-3B-bnb-4bit
+Dataset fine-tuning & GRPO: Ichsan2895/alpaca-gpt4-indonesian
