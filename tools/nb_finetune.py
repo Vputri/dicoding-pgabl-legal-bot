@@ -78,6 +78,10 @@ WANDB_KEY = load_secret("WANDB_API_KEY", required=False)
 """),
     code("""
 # ---- Konfigurasi global ----
+# Jika T4 gratis terasa terlalu lambat atau kehabisan kuota, ganti ke varian 1.5B:
+#   BASE_MODEL = "unsloth/Qwen2.5-1.5B-bnb-4bit"
+# Keduanya sama-sama Small Language Model base yang didukung Unsloth dan memenuhi
+# rubrik; yang 1.5B kira-kira dua kali lebih cepat per step.
 BASE_MODEL     = "unsloth/Qwen2.5-3B-bnb-4bit"   # base text-generation, didukung Unsloth
 DATASET_ID     = "Ichsan2895/alpaca-gpt4-indonesian"
 MAX_SEQ_LENGTH = 1024
@@ -93,6 +97,26 @@ if USE_WANDB:
     os.environ["WANDB_PROJECT"] = "pgabl-legal-chatbot"
 REPORT_TO = "wandb" if USE_WANDB else "none"
 print("logging ke:", REPORT_TO)
+"""),
+
+    md("""
+### 2.1 Lokasi checkpoint
+
+Sesi Colab gratis dapat terputus di tengah training. Dengan me-mount Google Drive,
+checkpoint dan adapter hasil tiap eksperimen selamat, sehingga training bisa
+dilanjutkan (`resume_from_checkpoint`) alih-alih diulang dari nol.
+"""),
+    code("""
+CKPT_ROOT = "outputs"
+try:
+    from google.colab import drive
+    drive.mount("/content/drive")
+    CKPT_ROOT = "/content/drive/MyDrive/pgabl_outputs"
+except Exception:
+    print("Drive tidak tersedia — checkpoint disimpan di disk sesi (hilang bila terputus).")
+
+os.makedirs(CKPT_ROOT, exist_ok=True)
+print("checkpoint disimpan di:", CKPT_ROOT)
 """),
 
     md("""
@@ -287,7 +311,7 @@ def run_experiment(name, cfg):
     model, tok = build_model(cfg["lora_r"], cfg["lora_alpha"], cfg["lora_dropout"])
 
     args = SFTConfig(
-        output_dir=f"outputs/{name}",
+        output_dir=f"{CKPT_ROOT}/{name}",
         max_steps=MAX_STEPS,
         per_device_train_batch_size=cfg["per_device_train_batch_size"],
         gradient_accumulation_steps=cfg["gradient_accumulation_steps"],
@@ -323,10 +347,27 @@ def run_experiment(name, cfg):
         eval_dataset=eval_dataset,
         args=args,
     )
-    stats = trainer.train()
+    # Lanjutkan dari checkpoint bila sesi sebelumnya sempat terputus.
+    ada_ckpt = os.path.isdir(args.output_dir) and any(
+        d.startswith("checkpoint-") for d in os.listdir(args.output_dir)
+    )
+    if ada_ckpt:
+        print("checkpoint ditemukan — melanjutkan training")
+    stats = trainer.train(resume_from_checkpoint=ada_ckpt)
     history = list(trainer.state.log_history)
+
+    # Adapter disimpan agar pemenang cukup DIMUAT ULANG, bukan dilatih ulang
+    # dari nol (menghemat satu putaran 800 steps di GPU gratis).
+    adapter_dir = f"{CKPT_ROOT}/adapter_{name}"
+    model.save_pretrained(adapter_dir)
+    tok.save_pretrained(adapter_dir)
+    import json as _json
+    with open(f"{adapter_dir}/log_history.json", "w") as f:
+        _json.dump(history, f)
+
     print(f"\\n[{name}] selesai — {stats.metrics['train_runtime']:.0f} detik, "
           f"train_loss={stats.metrics['train_loss']:.4f}")
+    print(f"adapter tersimpan di: {adapter_dir}")
     return trainer, model, tok, history
 """),
     code("""
@@ -400,14 +441,23 @@ BEST = best_row["eksperimen"]
 print("Eksperimen terpilih:", BEST)
 print(best_row.to_string())
 
-# Trainer/model milik eksperimen terpilih dipakai untuk tahap push.
-best_trainer, best_model, best_tok = (
-    (trainer_b, model_b, tok_b) if BEST.startswith("B") else (None, None, None)
-)
-if best_model is None:
-    # Eksperimen A perlu dilatih ulang karena memorinya sudah dibebaskan di §6.
-    print("\\nMelatih ulang eksperimen A sebagai model final...")
-    best_trainer, best_model, best_tok, _ = run_experiment("A_final", EXPERIMENTS["A_baseline"])
+if BEST.startswith("B"):
+    # Eksperimen B masih berada di memori, langsung dipakai.
+    best_model, best_tok = model_b, tok_b
+else:
+    # Eksperimen A sudah dibebaskan dari VRAM di §6 — adapter-nya dimuat ulang
+    # dari disk, jauh lebih murah daripada melatih ulang 800 steps.
+    free_memory("trainer_b", "model_b", "tok_b")
+    best_model, best_tok = FastLanguageModel.from_pretrained(
+        model_name=f"{CKPT_ROOT}/adapter_{BEST}",
+        max_seq_length=MAX_SEQ_LENGTH,
+        dtype=None,
+        load_in_4bit=True,
+        token=HF_TOKEN,
+    )
+    best_tok = get_chat_template(best_tok, chat_template="chatml")
+
+print("model final siap:", BEST)
 """),
 
     md("## 8. Uji cepat model hasil fine-tuning"),

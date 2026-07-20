@@ -1,0 +1,12 @@
+# Sampah metadata macOS (muncul karena drive ber-format exFAT)
+._*
+.DS_Store
+
+# Artefak lokal
+__pycache__/
+*.pyc
+outputs/
+faiss_index_uu/
+
+# Berkas submission hasil pengemasan
+PGABL_*.zip
